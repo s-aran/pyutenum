@@ -8,7 +8,7 @@ def func(val: int) -> int:
 
 
 class AstBuildingTest(TestCase):
-    """Test for AST buolding."""
+    """Test for AST building."""
 
     def test_1(self):
         """the simple test"""
@@ -82,7 +82,7 @@ class InnerClass:
             def test_b(self):
                 self.assertTrue(True)
 
-        class InnerTsetClassBBB(TestCase):
+        class InnerTestClassBBB(TestCase):
             def test_a(self):
                 self.assertTrue(True)
 
