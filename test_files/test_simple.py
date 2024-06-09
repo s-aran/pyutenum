@@ -1,6 +1,7 @@
 import unittest
 import unittest as ut
 from unittest import TestCase, skip
+from unittest import skip as sk
 
 
 def func(val: int) -> int:
