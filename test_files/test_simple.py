@@ -3,6 +3,14 @@ import unittest as ut
 from unittest import TestCase, skip
 from unittest import skip as sk
 
+# NOTE: invalid syntax
+# import .unittest
+from .unittest import skip, TestCase
+
+
+# NOTE: not allowed
+# from ut import skip
+
 
 def func(val: int) -> int:
     return val + 100

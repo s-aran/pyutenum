@@ -128,30 +128,80 @@ fn main() {
     }
 }
 
+struct Import {
+    module: String,
+    alias: Vec<String>,
+    level: u8,
+    exports: Vec<Box<Import>>,
+}
+
+impl Default for Import {
+    fn default() -> Self {
+        Self {
+            module: "".to_owned(),
+            alias: vec![],
+            level: 0,
+            exports: vec![],
+        }
+    }
+}
+
+impl From<Import> for StmtImport {
+    fn from(stmt: StmtImport) -> Self {
+        println!("{:?}", stmt);
+
+        Import::new("hoge".to_owned())
+    }
+}
+
+impl Import {
+    pub fn new(module: String) -> Self {
+        let mut result = Self::default();
+        result.module = module;
+        result
+    }
+}
+
+// {module: {exported: (alias, ...), ...}, ...}
 fn module_runner(
     imports: &Vec<StmtImport>,
     import_froms: &Vec<StmtImportFrom>,
 ) -> HashMap<String, Option<HashMap<String, HashSet<Option<String>>>>> {
     // original module name: [exported, ...]
-    let mut result = HashMap::new();
+    let mut result: HashMap<String, Option<HashMap<String, HashSet<Option<String>>>>> =
+        HashMap::new();
 
     // import ...
     for stmt in imports.iter() {
         let module = stmt.names.get(0).unwrap();
         result.insert(module.name.to_string(), None);
+
+        let aaa: Import = Import::from(stmt);
     }
 
     // from ... import ... (as ...)
     for stmt in import_froms.iter() {
         let module = stmt.module.as_ref().unwrap().to_string();
-        let mut tmp: HashSet<Option<String>> = HashSet::new();
+        let mut exports: HashMap<String, HashSet<Option<String>>> = HashMap::new();
         if result.contains_key(&module) {
+            println!("contains: {}", module);
+
             // merge exports
+            let tmp = match result.get(&module).unwrap() {
+                Some(e) => e.to_owned(),
+                None => HashMap::new(),
+            };
+
+            for (e, a) in tmp.iter() {
+                println!("e: {:?}", e);
+                println!("a: {:?}", a);
+            }
+
             // let exports = result.get(&module).unwrap().to_owned();
             // tmp.extend(exports);
         }
         // tmp.extend(stmt.names.iter().map(|e| e.name.to_string()));
-        result.insert(module, Some(tmp));
+        result.insert(module, Some(exports));
     }
 
     result
