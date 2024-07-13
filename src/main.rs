@@ -1,3 +1,4 @@
+use crate::ast::Alias;
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
@@ -50,7 +51,7 @@ fn main() {
     };
 
     for e in result.iter() {
-        println!("{:?}", e);
+        // println!("{:?}", e);
     }
 
     println!("");
@@ -63,7 +64,7 @@ fn main() {
     let rl = result.get(result.len() - 1).unwrap();
     let class_deco = rl.as_class_def_stmt().unwrap();
     for d in class_deco.decorator_list.iter() {
-        println!("{:?}", d);
+        // println!("{:?}", d);
     }
 
     let mut states = States::default();
@@ -91,7 +92,7 @@ fn main() {
 
         println!("imports: {}", states.imports.len());
         for stmt in states.imports.iter() {
-            println!("{:?}", stmt);
+            println!("stmt: {:?}", stmt);
             for name in stmt.names.iter() {
                 let asname = name.asname.as_ref();
                 if asname.is_some() {
@@ -103,8 +104,11 @@ fn main() {
 
     println!("--------------------------------------------------------------------------------");
 
-    let mods = module_runner(&states.imports, &states.import_from);
-    println!("{:?}", mods);
+    let mods = module_runner2(&states.imports, &states.import_from);
+    println!("mods:");
+    print_pretty(&mods);
+
+    // TODO: load script level > 0
 
     for c in states.classes.iter() {
         // println!("* {} in methods: {}", c.name, c.body.len());
@@ -117,7 +121,7 @@ fn main() {
             // println!("* {}", func.name);
 
             for deco in func.decorator_list.iter() {
-                // println!("* {} in decorator list", deco);
+                println!("* {:?} in decorator list", deco);
             }
         }
 
@@ -128,29 +132,200 @@ fn main() {
     }
 }
 
+
+
+#[derive(Debug)]
 struct Import {
     module: String,
-    alias: Vec<String>,
+    aliases: Vec<String>,
     level: u8,
     exports: Vec<Box<Import>>,
+}
+
+#[derive(Debug)]
+struct Name {
+    name: String,
+    alias: Option<String>,
+}
+
+impl Default for Name {
+    fn default() -> Self {
+        Self {
+            name: "".to_string(),
+            alias: None,
+        }
+    }
+}
+
+impl From<&Alias> for Name {
+    fn from(a: &Alias) -> Self {
+        Self {
+            name: a.name.to_string(),
+            alias: match &a.asname {
+                Some(n) => Some(n.to_string()),
+                None => None,
+            },
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Import2 {
+    name: String,
+    alias: Vec<Name>,
+    level: u32,
+    from_import: bool,
+}
+
+impl Default for Import2 {
+    fn default() -> Self {
+        Self {
+            name: "".to_owned(),
+            alias: vec![],
+            level: 0,
+            from_import: false,
+        }
+    }
+}
+
+impl From<&StmtImport> for Import2 {
+    fn from(stmt: &StmtImport) -> Self {
+        let mut result = Self::default();
+
+        let first = stmt.names.get(0).unwrap();
+        result.name = first.name.to_string();
+        result.alias.push(first.into());
+
+        println!("from<ImportStmt>: {:?}", stmt);
+
+        result
+    }
+}
+
+impl From<&StmtImportFrom> for Import2 {
+    fn from(stmt: &StmtImportFrom) -> Self {
+        let mut result = Self::default();
+        // println!("!! md: {:?}", stmt.module);
+        result.from_import = true;
+
+        result.name = stmt.module.clone().unwrap().to_string();
+        // println!(" ------ {:?}", stmt.level.unwrap());
+        // println!(" ------ {:?}", stmt.level.unwrap().to_u32());
+        result.level = match stmt.level {
+            Some(v) => v.to_u32(),
+            None => 0,
+        };
+
+        for name in stmt.names.iter() {
+            // println!("!! nm: {:?}", name.name);
+            // println!("!! as: {:?}", name.asname);
+            result.alias.push(name.into());
+        }
+
+        // let first = stmt.names.get(0).unwrap();
+        // result.name = first.name.to_string();
+
+        // if first.asname.is_some() {
+        //     // result.alias = Some(first.asname.clone().unwrap().to_string());
+        // }
+
+        // let hoge = &stmt.names[1..];
+        // for e in hoge.iter() {
+        //     let mut qqq = Import2::default();
+        //     qqq.name = e.name.to_string();
+        //     if e.asname.is_some() {
+        //         qqq.alias = Some(e.asname.clone().unwrap().to_string());
+        //     }
+        //     result.exports.push(Box::new(qqq));
+        // }
+
+        println!("from<FromImportStmt>: {:?}", stmt);
+
+        result
+    }
+}
+
+impl Import2 {
+    pub fn print_pretty(&self) {
+        println!("name: {}", self.name);
+        println!("level: {}", self.level);
+        println!("from import: {}", self.from_import);
+        for a in self.alias.iter() {
+            println!("  alias: {}", a.name);
+            if a.alias.is_some() {
+                println!("    as: {}", a.alias.as_ref().unwrap());
+            }
+        }
+    }
 }
 
 impl Default for Import {
     fn default() -> Self {
         Self {
             module: "".to_owned(),
-            alias: vec![],
+            aliases: vec![],
             level: 0,
             exports: vec![],
         }
     }
 }
 
-impl From<Import> for StmtImport {
-    fn from(stmt: StmtImport) -> Self {
+impl From<&StmtImport> for Import {
+    fn from(stmt: &StmtImport) -> Self {
+        let mut result = Self::default();
+        result.module = stmt.names.get(0).unwrap().name.to_string();
+
         println!("{:?}", stmt);
 
-        Import::new("hoge".to_owned())
+        // for e in stmt.names.iter() {
+        //     println!("from<StmtImport>: {:?}", e);
+
+        //     // export
+        //     result.
+        // }
+
+        result
+    }
+}
+
+impl From<&StmtImportFrom> for Import {
+    fn from(stmt: &StmtImportFrom) -> Self {
+        let mut result = Self::default();
+
+        let first = &stmt.names.get(0).unwrap();
+        println!("from<StmtImportFrom> first: {:?}", first);
+        result.module = first.name.to_string();
+
+        if first.asname.is_some() {
+            let asname = first.asname.as_ref().unwrap();
+            result.aliases.push(asname.to_string());
+        }
+
+        let hoge = &stmt.names[1..];
+        for e in hoge.iter() {
+            // println!("from<StmtImportFrom>: {:?}", e);
+
+            // println!("nm: {:?}", e.name.to_string());
+            // println!("as: {:?}", e.asname);
+
+            let mut qqq = Import::default();
+            qqq.module = e.name.to_string();
+            if e.asname.is_some() {
+                qqq.aliases.push(e.asname.clone().unwrap().to_string());
+            }
+            result.exports.push(Box::new(qqq));
+
+            // let export = &e.to_string();
+            // println!("ex: {}", export);
+
+            // let name = &e.to_string();
+            // println!("nm: {}", name);
+            // result.aliases.append(name);
+        }
+
+        println!("result: {:?}", result);
+
+        result
     }
 }
 
@@ -167,6 +342,8 @@ fn module_runner(
     imports: &Vec<StmtImport>,
     import_froms: &Vec<StmtImportFrom>,
 ) -> HashMap<String, Option<HashMap<String, HashSet<Option<String>>>>> {
+    println!("--------------------------------------------------------------------------------");
+    //
     // original module name: [exported, ...]
     let mut result: HashMap<String, Option<HashMap<String, HashSet<Option<String>>>>> =
         HashMap::new();
@@ -176,15 +353,17 @@ fn module_runner(
         let module = stmt.names.get(0).unwrap();
         result.insert(module.name.to_string(), None);
 
-        let aaa: Import = Import::from(stmt);
+        let aaa: Import = stmt.into();
     }
 
     // from ... import ... (as ...)
     for stmt in import_froms.iter() {
         let module = stmt.module.as_ref().unwrap().to_string();
         let mut exports: HashMap<String, HashSet<Option<String>>> = HashMap::new();
+        let aaa: Import = stmt.into();
+
         if result.contains_key(&module) {
-            println!("contains: {}", module);
+            // println!("contains: {}", module);
 
             // merge exports
             let tmp = match result.get(&module).unwrap() {
@@ -193,8 +372,8 @@ fn module_runner(
             };
 
             for (e, a) in tmp.iter() {
-                println!("e: {:?}", e);
-                println!("a: {:?}", a);
+                // println!("e: {:?}", e);
+                // println!("a: {:?}", a);
             }
 
             // let exports = result.get(&module).unwrap().to_owned();
@@ -206,6 +385,104 @@ fn module_runner(
 
     result
 }
+
+type ModuleName = String;
+type AliasName = Option<String>;
+type ExportName = String;
+type Level = u32;
+type Module = (ModuleName, Level, bool);
+type Exports = HashMap<ExportName, AliasName>;
+type ImportMap = HashMap<Module, Option<Exports>>;
+
+// {module: {exported: (alias, ...), ...}, level}, ...
+fn module_runner2(imports: &Vec<StmtImport>, import_froms: &Vec<StmtImportFrom>) -> ImportMap {
+    println!("--------------------------------------------------------------------------------");
+
+    // original module name: [exported, ...]
+    let mut result: ImportMap = HashMap::new();
+
+    // import ...
+    let mut imports2: Vec<Import2> = imports.iter().map(|s| From::from(s)).collect();
+
+    // from ... import ... (as ...)
+    let import_froms2: Vec<Import2> = import_froms.iter().map(|s| From::from(s)).collect();
+
+    imports2.extend(import_froms2);
+
+    for i in imports2.iter() {
+        // println!("{:?}", i);
+        i.print_pretty();
+
+        let mut exports: Exports = HashMap::new();
+        for a in i.alias.iter() {
+            let nm = a.name.clone();
+            let al = a.alias.clone();
+            exports.insert(nm, al);
+        }
+
+        if !result.contains_key(&(i.name.clone(), i.level, i.from_import)) {
+            let module: Module = (i.name.to_owned(), i.level, i.from_import);
+            result.insert(module, Some(exports));
+        } else {
+            let q = result
+                .get_mut(&(i.name.clone(), i.level, i.from_import))
+                .unwrap()
+                .as_mut()
+                .unwrap();
+
+            println!("q = {:?}", q);
+            q.extend(exports);
+        }
+    }
+
+    println!("********************************************************************************");
+    print_pretty(&result);
+    println!("********************************************************************************");
+
+    result
+}
+
+fn is_valid_exported(import: &ImportMap, exported: &String) {
+    // split module*.class?.func
+
+    let splitted = exported.split(".");
+    let top_module = splitted.get(0).unwrap();
+    
+    let leveled_modules = import.filter(|e| {
+        e.1 > 0 && e.2
+    });
+
+    for (k, v) in import.iter() {
+        println!("module: {:?}", k);
+        if v.is_some() {
+            let e = v.as_ref().unwrap();
+            for (kk, vv) in e.iter() {
+                println!("  exported: {:?}", kk);
+                if vv.is_some() {
+                    println!("    as: {:?}", vv);
+                }
+            }
+        }
+    }
+}
+
+
+fn print_pretty(import: &ImportMap) {
+    for (k, v) in import.iter() {
+        println!("module: {:?}", k);
+        if v.is_some() {
+            let e = v.as_ref().unwrap();
+            for (kk, vv) in e.iter() {
+                println!("  exported: {:?}", kk);
+                if vv.is_some() {
+                    println!("    as: {:?}", vv);
+                }
+            }
+        }
+    }
+}
+
+// (module, level
 
 #[derive(Debug, Default)]
 struct States {
