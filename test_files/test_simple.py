@@ -1,11 +1,17 @@
 import unittest
+from datetime import datetime
+from datetime import datetime as dt
 import unittest as ut
 from unittest import TestCase, skip
 from unittest import skip as sk
+from unittest import TestCase, skip as sk2
+from unittest import TestCase as tc, skip as sk2
 
 # NOTE: invalid syntax
 # import .unittest
-from .unittest import skip, TestCase
+from .my_unittest import my_skip, MyTestCase
+from ..mymy_unittest import mymy_skip
+from ...mymymy_unittest import mymymy_skip
 
 
 # NOTE: not allowed
