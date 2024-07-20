@@ -1,23 +1,17 @@
-use crate::ast::Alias;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fs::File,
-    hash::{DefaultHasher, Hash, Hasher},
     io::Read,
-    path::Path,
+    path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use rustpython_parser::{
-    ast::{
-        self, located::Stmt, Identifier, StmtClassDef, StmtFunctionDef, StmtImport, StmtImportFrom,
-    },
+    ast::{self, Alias, StmtClassDef, StmtFunctionDef, StmtImport, StmtImportFrom, StmtRaise},
     Parse,
 };
 
-fn main() {
-    let test_py_base_path = Path::new("test_files");
-    let test_py_path = test_py_base_path.join("test_simple.py");
-
+fn parse_file(test_py_path: &Path) {
     let mut test_file = match File::open(test_py_path) {
         Ok(f) => f,
         Err(e) => {
@@ -37,6 +31,9 @@ fn main() {
         }
     };
 
+    // println!("{}", buf);
+
+    let test_py_base_path = test_py_path.parent().unwrap();
     let result = match ast::Suite::parse(
         buf.as_str(),
         test_py_base_path.file_name().unwrap().to_str().unwrap(),
@@ -50,21 +47,23 @@ fn main() {
         }
     };
 
-    for e in result.iter() {
-        // println!("{:?}", e);
-    }
+    // for e in result.iter() {
+    //     println!("{:?}", e);
+    // }
 
     println!("");
 
-    let rf = result.get(0).unwrap();
+    // let rf = result.get(0).unwrap();
     // let import_stmt = rf.as_import_stmt().unwrap();
     // let name_first = import_stmt.names.get(0).unwrap();
     // println!("{} as {:?}", name_first.name, name_first.asname);
 
     let rl = result.get(result.len() - 1).unwrap();
-    let class_deco = rl.as_class_def_stmt().unwrap();
-    for d in class_deco.decorator_list.iter() {
-        // println!("{:?}", d);
+    if rl.is_class_def_stmt() {
+        let class_deco = rl.as_class_def_stmt().unwrap();
+        for d in class_deco.decorator_list.iter() {
+            // println!("{:?}", d);
+        }
     }
 
     let mut states = States::default();
@@ -82,31 +81,84 @@ fn main() {
             ast::Stmt::ClassDef(stmt) => {
                 // test_classes.push(stmt);
                 class_def_stmt(&mut states, &stmt);
+                // TODO: exploring to functions, recursive calling this function, too fast.
             }
             ast::Stmt::FunctionDef(stmt) => {
                 // test_methods.push(stmt);
                 func_def_stmt(&mut states, &stmt);
+                for e in stmt.body.iter() {
+                    match e {
+                        ast::Stmt::Raise(s) => {
+                            // TODO: REFACTORING
+                            println!("{:?}", s);
+                            if s.exc.is_none() {
+                                continue;
+                            }
+                            let call = &s.exc.clone().unwrap();
+                            if !call.is_call_expr() && call.as_call_expr().is_none() {
+                                continue;
+                            }
+                            let call_expr = call.as_call_expr().unwrap();
+
+                            let aa = call_expr.func.clone();
+                            let ee = aa.as_attribute_expr().unwrap();
+                            let vv = &ee.value;
+                            let attr = &ee.attr;
+                            println!("{:?}", attr);
+                            println!("{:?}", vv);
+                            raise_stmt(&mut states, &s);
+                        }
+                        _ => {}
+                    }
+                }
             }
             _ => {}
         }
 
-        println!("imports: {}", states.imports.len());
-        for stmt in states.imports.iter() {
-            println!("stmt: {:?}", stmt);
-            for name in stmt.names.iter() {
-                let asname = name.asname.as_ref();
-                if asname.is_some() {
-                    println!("* import ==> {:?}", asname.unwrap().as_str());
-                }
+        // println!("imports: {}", states.imports.len());
+        // for stmt in states.imports.iter() {
+        for stmt in states.raises.iter() {
+            println!("stmt: {:?}", stmt.exc);
+            if stmt.exc.is_none() {
+                continue;
             }
+
+            let call = &stmt.exc;
+            // let func = &call.func;
+            println!("{:?}", call);
+
+            // for name in stmt.names.iter() {
+            //     let asname = name.asname.as_ref();
+            //     if asname.is_some() {
+            //         println!("* import ==> {:?}", asname.unwrap().as_str());
+            //     }
+            // }
         }
     }
 
     println!("--------------------------------------------------------------------------------");
 
-    let mods = module_runner2(&states.imports, &states.import_from);
+    let mods = module_runner(&states.imports, &states.import_from);
     println!("mods:");
     print_pretty(&mods);
+
+    let leveled_modules: ImportMap = mods
+        .clone()
+        .into_iter()
+        .filter(|(k, _)| k.2 && k.1 > 0)
+        .collect();
+
+    for (m, e) in leveled_modules.iter() {
+        let (name, level, _) = m;
+
+        let pb = make_path_from_module(name, level);
+        let p = test_py_base_path.join(pb);
+        println!("{:?}", p);
+        if p.exists() {
+            println!("{:?}", p);
+            has_unittest_skip(&p);
+        }
+    }
 
     // TODO: load script level > 0
 
@@ -132,14 +184,11 @@ fn main() {
     }
 }
 
+fn main() {
+    let test_py_base_path = Path::new("test_files");
+    let test_py_path = test_py_base_path.join("test_simple.py");
 
-
-#[derive(Debug)]
-struct Import {
-    module: String,
-    aliases: Vec<String>,
-    level: u8,
-    exports: Vec<Box<Import>>,
+    parse_file(&test_py_path);
 }
 
 #[derive(Debug)]
@@ -170,14 +219,14 @@ impl From<&Alias> for Name {
 }
 
 #[derive(Debug)]
-struct Import2 {
+struct Import {
     name: String,
     alias: Vec<Name>,
     level: u32,
     from_import: bool,
 }
 
-impl Default for Import2 {
+impl Default for Import {
     fn default() -> Self {
         Self {
             name: "".to_owned(),
@@ -188,7 +237,7 @@ impl Default for Import2 {
     }
 }
 
-impl From<&StmtImport> for Import2 {
+impl From<&StmtImport> for Import {
     fn from(stmt: &StmtImport) -> Self {
         let mut result = Self::default();
 
@@ -202,7 +251,7 @@ impl From<&StmtImport> for Import2 {
     }
 }
 
-impl From<&StmtImportFrom> for Import2 {
+impl From<&StmtImportFrom> for Import {
     fn from(stmt: &StmtImportFrom) -> Self {
         let mut result = Self::default();
         // println!("!! md: {:?}", stmt.module);
@@ -222,30 +271,13 @@ impl From<&StmtImportFrom> for Import2 {
             result.alias.push(name.into());
         }
 
-        // let first = stmt.names.get(0).unwrap();
-        // result.name = first.name.to_string();
-
-        // if first.asname.is_some() {
-        //     // result.alias = Some(first.asname.clone().unwrap().to_string());
-        // }
-
-        // let hoge = &stmt.names[1..];
-        // for e in hoge.iter() {
-        //     let mut qqq = Import2::default();
-        //     qqq.name = e.name.to_string();
-        //     if e.asname.is_some() {
-        //         qqq.alias = Some(e.asname.clone().unwrap().to_string());
-        //     }
-        //     result.exports.push(Box::new(qqq));
-        // }
-
         println!("from<FromImportStmt>: {:?}", stmt);
 
         result
     }
 }
 
-impl Import2 {
+impl Import {
     pub fn print_pretty(&self) {
         println!("name: {}", self.name);
         println!("level: {}", self.level);
@@ -259,133 +291,6 @@ impl Import2 {
     }
 }
 
-impl Default for Import {
-    fn default() -> Self {
-        Self {
-            module: "".to_owned(),
-            aliases: vec![],
-            level: 0,
-            exports: vec![],
-        }
-    }
-}
-
-impl From<&StmtImport> for Import {
-    fn from(stmt: &StmtImport) -> Self {
-        let mut result = Self::default();
-        result.module = stmt.names.get(0).unwrap().name.to_string();
-
-        println!("{:?}", stmt);
-
-        // for e in stmt.names.iter() {
-        //     println!("from<StmtImport>: {:?}", e);
-
-        //     // export
-        //     result.
-        // }
-
-        result
-    }
-}
-
-impl From<&StmtImportFrom> for Import {
-    fn from(stmt: &StmtImportFrom) -> Self {
-        let mut result = Self::default();
-
-        let first = &stmt.names.get(0).unwrap();
-        println!("from<StmtImportFrom> first: {:?}", first);
-        result.module = first.name.to_string();
-
-        if first.asname.is_some() {
-            let asname = first.asname.as_ref().unwrap();
-            result.aliases.push(asname.to_string());
-        }
-
-        let hoge = &stmt.names[1..];
-        for e in hoge.iter() {
-            // println!("from<StmtImportFrom>: {:?}", e);
-
-            // println!("nm: {:?}", e.name.to_string());
-            // println!("as: {:?}", e.asname);
-
-            let mut qqq = Import::default();
-            qqq.module = e.name.to_string();
-            if e.asname.is_some() {
-                qqq.aliases.push(e.asname.clone().unwrap().to_string());
-            }
-            result.exports.push(Box::new(qqq));
-
-            // let export = &e.to_string();
-            // println!("ex: {}", export);
-
-            // let name = &e.to_string();
-            // println!("nm: {}", name);
-            // result.aliases.append(name);
-        }
-
-        println!("result: {:?}", result);
-
-        result
-    }
-}
-
-impl Import {
-    pub fn new(module: String) -> Self {
-        let mut result = Self::default();
-        result.module = module;
-        result
-    }
-}
-
-// {module: {exported: (alias, ...), ...}, ...}
-fn module_runner(
-    imports: &Vec<StmtImport>,
-    import_froms: &Vec<StmtImportFrom>,
-) -> HashMap<String, Option<HashMap<String, HashSet<Option<String>>>>> {
-    println!("--------------------------------------------------------------------------------");
-    //
-    // original module name: [exported, ...]
-    let mut result: HashMap<String, Option<HashMap<String, HashSet<Option<String>>>>> =
-        HashMap::new();
-
-    // import ...
-    for stmt in imports.iter() {
-        let module = stmt.names.get(0).unwrap();
-        result.insert(module.name.to_string(), None);
-
-        let aaa: Import = stmt.into();
-    }
-
-    // from ... import ... (as ...)
-    for stmt in import_froms.iter() {
-        let module = stmt.module.as_ref().unwrap().to_string();
-        let mut exports: HashMap<String, HashSet<Option<String>>> = HashMap::new();
-        let aaa: Import = stmt.into();
-
-        if result.contains_key(&module) {
-            // println!("contains: {}", module);
-
-            // merge exports
-            let tmp = match result.get(&module).unwrap() {
-                Some(e) => e.to_owned(),
-                None => HashMap::new(),
-            };
-
-            for (e, a) in tmp.iter() {
-                // println!("e: {:?}", e);
-                // println!("a: {:?}", a);
-            }
-
-            // let exports = result.get(&module).unwrap().to_owned();
-            // tmp.extend(exports);
-        }
-        // tmp.extend(stmt.names.iter().map(|e| e.name.to_string()));
-        result.insert(module, Some(exports));
-    }
-
-    result
-}
-
 type ModuleName = String;
 type AliasName = Option<String>;
 type ExportName = String;
@@ -395,17 +300,17 @@ type Exports = HashMap<ExportName, AliasName>;
 type ImportMap = HashMap<Module, Option<Exports>>;
 
 // {module: {exported: (alias, ...), ...}, level}, ...
-fn module_runner2(imports: &Vec<StmtImport>, import_froms: &Vec<StmtImportFrom>) -> ImportMap {
+fn module_runner(imports: &Vec<StmtImport>, import_froms: &Vec<StmtImportFrom>) -> ImportMap {
     println!("--------------------------------------------------------------------------------");
 
     // original module name: [exported, ...]
     let mut result: ImportMap = HashMap::new();
 
     // import ...
-    let mut imports2: Vec<Import2> = imports.iter().map(|s| From::from(s)).collect();
+    let mut imports2: Vec<Import> = imports.iter().map(|s| From::from(s)).collect();
 
     // from ... import ... (as ...)
-    let import_froms2: Vec<Import2> = import_froms.iter().map(|s| From::from(s)).collect();
+    let import_froms2: Vec<Import> = import_froms.iter().map(|s| From::from(s)).collect();
 
     imports2.extend(import_froms2);
 
@@ -435,37 +340,26 @@ fn module_runner2(imports: &Vec<StmtImport>, import_froms: &Vec<StmtImportFrom>)
         }
     }
 
-    println!("********************************************************************************");
-    print_pretty(&result);
-    println!("********************************************************************************");
+    // println!("********************************************************************************");
+    // print_pretty(&result);
+    // println!("********************************************************************************");
 
     result
 }
 
-fn is_valid_exported(import: &ImportMap, exported: &String) {
-    // split module*.class?.func
+fn has_unittest_skip(path: &Path) -> bool {
+    parse_file(&path);
 
-    let splitted = exported.split(".");
-    let top_module = splitted.get(0).unwrap();
-    
-    let leveled_modules = import.filter(|e| {
-        e.1 > 0 && e.2
-    });
-
-    for (k, v) in import.iter() {
-        println!("module: {:?}", k);
-        if v.is_some() {
-            let e = v.as_ref().unwrap();
-            for (kk, vv) in e.iter() {
-                println!("  exported: {:?}", kk);
-                if vv.is_some() {
-                    println!("    as: {:?}", vv);
-                }
-            }
-        }
-    }
+    true
 }
 
+fn make_path_from_module(name: &ModuleName, level: &Level) -> PathBuf {
+    let mut nodes = [".."].repeat(*level as usize - 1).to_vec();
+    nodes.extend(name.split('.'));
+
+    let path_str = nodes.join("/") + ".py";
+    PathBuf::from_str(path_str.as_str()).unwrap()
+}
 
 fn print_pretty(import: &ImportMap) {
     for (k, v) in import.iter() {
@@ -490,6 +384,7 @@ struct States {
     import_from: Vec<StmtImportFrom>,
     classes: Vec<StmtClassDef>,
     methods: Vec<StmtFunctionDef>,
+    raises: Vec<StmtRaise>,
 }
 
 fn import_stmt(states: &mut States, stmt: &StmtImport) {
@@ -507,6 +402,8 @@ fn class_def_stmt(states: &mut States, stmt: &StmtClassDef) {
 fn func_def_stmt(states: &mut States, stmt: &StmtFunctionDef) {
     states.methods.push(stmt.clone());
 }
+
+fn raise_stmt(states: &mut States, stmt: &StmtRaise) {}
 
 fn make_path_def_name(stmt: &StmtClassDef, current: &mut String, names: &mut Vec<String>) {
     let my_name = stmt.name.to_string();
