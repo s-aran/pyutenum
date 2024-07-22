@@ -182,12 +182,12 @@ fn module_runner(imports: &Vec<StmtImport>, import_froms: &Vec<StmtImportFrom>) 
 
         let mut exports: Exports = HashMap::new();
         for a in i.alias.iter() {
-            let nm = a.name.clone();
-            let al = a.alias.clone();
+            let nm = a.name.to_owned();
+            let al = a.alias.to_owned();
             exports.insert(nm, al);
         }
 
-        if !result.contains_key(&(i.name.clone(), i.level, i.from_import)) {
+        if !result.contains_key(&(i.name.to_owned(), i.level, i.from_import)) {
             let module: Module = (i.name.to_owned(), i.level, i.from_import);
             result.insert(module, Some(exports));
         } else {
@@ -222,15 +222,21 @@ fn has_unittest_skip(statements: &Statements) -> bool {
 fn enumerate_tests(statements: &Statements) -> Vec<String> {
     let mut result: Vec<String> = vec![];
 
+    // this module
+    result.push(make_test_name(statements, None, None));
+
     // root function
     for f in statements.methods.iter() {
         if f.name.starts_with(UNITTEST_TEST_CASE_PREFIX) {
-            result.push(make_test_name(&statements, None, &f));
+            result.push(make_test_name(&statements, None, Some(&f)));
         }
     }
 
     // class methods
     for c in statements.classes.iter() {
+        // this class
+        result.push(make_test_name(statements, Some(&c), None));
+
         for f in c.body.iter() {
             if !f.is_function_def_stmt() {
                 continue;
@@ -238,7 +244,7 @@ fn enumerate_tests(statements: &Statements) -> Vec<String> {
 
             let func = f.as_function_def_stmt().unwrap();
             if func.name.starts_with(UNITTEST_TEST_CASE_PREFIX) {
-                result.push(make_test_name(&statements, Some(&c), &func));
+                result.push(make_test_name(&statements, Some(&c), Some(&func)));
             }
         }
     }
@@ -249,19 +255,19 @@ fn enumerate_tests(statements: &Statements) -> Vec<String> {
 fn make_test_name(
     statements: &Statements,
     class: Option<&StmtClassDef>,
-    func: &StmtFunctionDef,
+    func: Option<&StmtFunctionDef>,
 ) -> String {
     let class_name = match class {
-        Some(c) => format!("{}.", c.name.to_string()),
+        Some(c) => format!(".{}", c.name.to_string()),
         None => "".to_string(),
     };
 
-    format!(
-        "{}.{}{}",
-        statements.module,
-        class_name,
-        func.name.to_string()
-    )
+    let func_name = match func {
+        Some(f) => format!(".{}", f.name.to_string()),
+        None => "".to_string(),
+    };
+
+    format!("{}{}{}", statements.module, class_name, func_name,)
 }
 
 fn make_path_from_module(name: &ModuleName, level: &Level) -> PathBuf {
