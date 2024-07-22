@@ -1,3 +1,6 @@
+use clap::{arg, command, Parser};
+use glob::glob;
+
 mod models;
 use std::{
     collections::HashMap,
@@ -128,20 +131,32 @@ fn parse_file(test_py_path: &Path) -> Result<Statements, String> {
 }
 
 fn main() {
-    let test_py_base_path = Path::new("test_files");
-    let test_py_path = test_py_base_path.join("test_simple.py");
+    let args = Args::parse();
 
-    let parsed: Statements = match parse_file(&test_py_path) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("{}", e);
-            return;
-        }
+    let target_dir = match args.files {
+        Some(p) => p,
+        None => ".".to_owned(),
     };
 
-    let tests = enumerate_tests(&parsed);
-    for t in tests.iter() {
-        println!("{}", t);
+    let ps = format!("{}/**/test_*.py", target_dir);
+    let r = glob(ps.as_str()).expect("failed glob");
+    for p in r {
+        let test_py_path = Path::new(&p.expect("fail"));
+        // let test_py_base_path = Path::new("test_files");
+        // let test_py_path = test_py_base_path.join("test_simple.py");
+
+        let parsed: Statements = match parse_file(&test_py_path) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("{}", e);
+                return;
+            }
+        };
+
+        let tests = enumerate_tests(&parsed);
+        for t in tests.iter() {
+            println!("{}", t);
+        }
     }
 }
 
@@ -434,4 +449,11 @@ fn build_statements(module_path: &Path, root: &Vec<Stmt>) -> Statements {
     }
 
     states
+}
+
+#[derive(Clone, Parser, Debug)]
+#[command(author, version, about, long_about=None)]
+struct Args {
+    #[arg(help = "FILE")]
+    files: Option<String>,
 }
