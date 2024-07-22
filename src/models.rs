@@ -26,7 +26,7 @@ pub struct Statements {
 
 #[derive(Debug)]
 pub struct Import {
-    pub name: String,
+    pub name: Option<String>,
     pub alias: Vec<Name>,
     pub level: u32,
     pub from_import: bool,
@@ -35,7 +35,7 @@ pub struct Import {
 impl Default for Import {
     fn default() -> Self {
         Self {
-            name: "".to_owned(),
+            name: Some("".to_owned()),
             alias: vec![],
             level: 0,
             from_import: false,
@@ -48,7 +48,7 @@ impl From<&StmtImport> for Import {
         let mut result = Self::default();
 
         let first = stmt.names.get(0).unwrap();
-        result.name = first.name.to_string();
+        result.name = Some(first.name.to_string());
         result.alias.push(first.into());
 
         // println!("from<ImportStmt>: {:?}", stmt);
@@ -60,12 +60,12 @@ impl From<&StmtImport> for Import {
 impl From<&StmtImportFrom> for Import {
     fn from(stmt: &StmtImportFrom) -> Self {
         let mut result = Self::default();
-        // println!("!! md: {:?}", stmt.module);
         result.from_import = true;
 
-        result.name = stmt.module.clone().unwrap().to_string();
-        // println!(" ------ {:?}", stmt.level.unwrap());
-        // println!(" ------ {:?}", stmt.level.unwrap().to_u32());
+        result.name = match &stmt.module {
+            Some(m) => Some(m.to_string()),
+            None => None,
+        };
         result.level = match stmt.level {
             Some(v) => v.to_u32(),
             None => 0,
@@ -85,7 +85,7 @@ impl From<&StmtImportFrom> for Import {
 
 impl Import {
     pub fn print_pretty(&self) {
-        println!("name: {}", self.name);
+        println!("name: {:?}", self.name);
         println!("level: {}", self.level);
         println!("from import: {}", self.from_import);
         for a in self.alias.iter() {
@@ -124,7 +124,7 @@ impl From<&Alias> for Name {
     }
 }
 
-pub type ModuleName = String;
+pub type ModuleName = Option<String>;
 pub type AliasName = Option<String>;
 pub type ExportName = String;
 pub type Level = u32;

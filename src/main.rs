@@ -141,7 +141,8 @@ fn main() {
     let ps = format!("{}/**/test_*.py", target_dir);
     let r = glob(ps.as_str()).expect("failed glob");
     for p in r {
-        let test_py_path = Path::new(&p.expect("fail"));
+        let tmp = p.unwrap();
+        let test_py_path = Path::new(&tmp);
         // let test_py_base_path = Path::new("test_files");
         // let test_py_path = test_py_base_path.join("test_simple.py");
 
@@ -265,7 +266,10 @@ fn make_test_name(
 
 fn make_path_from_module(name: &ModuleName, level: &Level) -> PathBuf {
     let mut nodes = [".."].repeat(*level as usize - 1).to_vec();
-    nodes.extend(name.split('.'));
+    match name {
+        Some(n) => nodes.extend(n.split('.').clone()),
+        None => {}
+    };
 
     let path_str = nodes.join("/") + ".py";
     PathBuf::from_str(path_str.as_str()).unwrap()
