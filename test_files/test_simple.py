@@ -6,6 +6,9 @@ from unittest import TestCase, skip
 from unittest import skip as sk
 from unittest import TestCase, skip as sk2
 from unittest import TestCase as tc, skip as sk2
+from unittest import *
+from a.b.c import d
+from . import hogg
 
 # NOTE: invalid syntax
 # import .unittest
