@@ -41,6 +41,10 @@ fn parse_file(test_py_path: &Path) -> Result<Statements, String> {
     match test_file.read_to_string(&mut buf) {
         Ok(s) => {
             // println!("{} bytes read.", s);
+            if s <= 0 {
+                eprintln!("{:?} empty", test_file);
+                return Ok(Statements::default());
+            }
         }
         Err(e) => {
             eprintln!("{}", e);
@@ -141,7 +145,18 @@ fn main() {
     let ps = format!("{}/**/test_*.py", target_dir);
     let r = glob(ps.as_str()).expect("failed glob");
     for p in r {
-        let tmp = p.unwrap();
+        let tmp = match p {
+            Ok(a) => a,
+            Err(e) => {
+                eprintln!("{}", e);
+                return;
+            }
+        };
+
+        if tmp.to_string_lossy().contains("site-packages") {
+            continue;
+        }
+
         let test_py_path = Path::new(&tmp);
         // let test_py_base_path = Path::new("test_files");
         // let test_py_path = test_py_base_path.join("test_simple.py");
@@ -223,7 +238,25 @@ fn enumerate_tests(statements: &Statements) -> Vec<String> {
     let mut result: Vec<String> = vec![];
 
     // this module
-    result.push(make_test_name(statements, None, None));
+    {
+        let splitted = statements.module.split('.').collect::<Vec<&str>>();
+        if splitted.len() <= 0 {
+            result.push(make_test_name(statements, None, None));
+        } else {
+            for e in splitted {
+                result.push(make_test_name(statements, None, None));
+            }
+        }
+
+        // let mut nodes = [".."].repeat(*level as usize - 1).to_vec();
+        // match name {
+        //     Some(n) => nodes.extend(n.split('.').clone()),
+        //     None => {}
+        // };
+
+        // let path_str = nodes.join("/") + ".py";
+        // PathBuf::from_str(path_str.as_str()).unwrap()
+    }
 
     // root function
     for f in statements.methods.iter() {
