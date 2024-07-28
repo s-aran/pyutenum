@@ -28,6 +28,8 @@ static UNITTEST_DJANGO_TRANSACTION_TEST_CASE_CLASS: &str = "TransactionTestCase"
 static UNITTEST_DJANGO_SIMPLE_TEST_CASE: &str = "SimpleTestCase";
 static UNITTEST_DJANGO_LIVE_SERVER_TEST_CASE: &str = "LiveServerTestCase";
 
+const IGNORE_DIR_NAMES: [&str; 1] = ["site-packages"];
+
 fn parse_file(test_py_path: &Path) -> Result<Statements, String> {
     let mut test_file = match File::open(test_py_path) {
         Ok(f) => f,
@@ -69,13 +71,13 @@ fn parse_file(test_py_path: &Path) -> Result<Statements, String> {
         }
     };
 
-    let rl = result.get(result.len() - 1).unwrap();
-    if rl.is_class_def_stmt() {
-        let class_deco = rl.as_class_def_stmt().unwrap();
-        for d in class_deco.decorator_list.iter() {
-            // println!("{:?}", d);
-        }
-    }
+    // let rl = result.get(result.len() - 1).unwrap();
+    // if rl.is_class_def_stmt() {
+    //     let class_deco = rl.as_class_def_stmt().unwrap();
+    //     for d in class_deco.decorator_list.iter() {
+    //         // println!("{:?}", d);
+    //     }
+    // }
 
     let states = build_statements(&test_py_path, &result);
 
@@ -84,55 +86,55 @@ fn parse_file(test_py_path: &Path) -> Result<Statements, String> {
     // println!("mods:");
     // print_pretty(&mods);
 
-    let mods = module_runner(&states.imports, &states.import_from);
-    let leveled_modules: ImportMap = mods
-        .clone()
-        .into_iter()
-        .filter(|(k, _)| k.2 && k.1 > 0)
-        .collect();
+    // let mods = module_runner(&states.imports, &states.import_from);
+    // let leveled_modules: ImportMap = mods
+    //     .clone()
+    //     .into_iter()
+    //     .filter(|(k, _)| k.2 && k.1 > 0)
+    //     .collect();
 
-    for (m, e) in leveled_modules.iter() {
-        let (name, level, _) = m;
+    // for (m, e) in leveled_modules.iter() {
+    //     let (name, level, _) = m;
 
-        let pb = make_path_from_module(name, level);
-        let p = test_py_base_path.join(pb);
-        // println!("{:?}", p);
-        if p.exists() {
-            // println!("{:?}", p);
-            let statements = match parse_file(&p) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("{}", e);
-                    continue;
-                }
-            };
+    //     let pb = make_path_from_module(name, level);
+    //     let p = test_py_base_path.join(pb);
+    //     // println!("{:?}", p);
+    //     if p.exists() {
+    //         // println!("{:?}", p);
+    //         let statements = match parse_file(&p) {
+    //             Ok(s) => s,
+    //             Err(e) => {
+    //                 eprintln!("{}", e);
+    //                 continue;
+    //             }
+    //         };
 
-            has_unittest_skip(&statements);
-        }
-    }
+    //         has_unittest_skip(&statements);
+    //     }
+    // }
 
-    // TODO: load script level > 0
+    // // TODO: load script level > 0
 
-    for c in states.classes.iter() {
-        // println!("* {} in methods: {}", c.name, c.body.len());
-        for b in c.body.iter() {
-            if !b.is_function_def_stmt() {
-                continue;
-            }
+    // for c in states.classes.iter() {
+    //     // println!("* {} in methods: {}", c.name, c.body.len());
+    //     for b in c.body.iter() {
+    //         if !b.is_function_def_stmt() {
+    //             continue;
+    //         }
 
-            let func = b.as_function_def_stmt().unwrap();
-            // println!("* {}", func.name);
+    //         let func = b.as_function_def_stmt().unwrap();
+    //         // println!("* {}", func.name);
 
-            for deco in func.decorator_list.iter() {
-                // println!("* {:?} in decorator list", deco);
-            }
-        }
+    //         for deco in func.decorator_list.iter() {
+    //             // println!("* {:?} in decorator list", deco);
+    //         }
+    //     }
 
-        let mut current = String::new();
-        let mut names = vec![];
-        make_path_def_name(c, &mut current, &mut names);
-        // println!("names: {:?}", names);
-    }
+    //     let mut current = String::new();
+    //     let mut names = vec![];
+    //     make_path_def_name(c, &mut current, &mut names);
+    //     // println!("names: {:?}", names);
+    // }
 
     Ok(states)
 }
@@ -147,10 +149,10 @@ fn main() {
 
     let mut statements_map: HashMap<String, Statements> = HashMap::new();
 
-    let ps = format!("{}/**/test_*.py", target_dir);
+    let ps = format!("{}/**/{}*.py", target_dir, UNITTEST_TEST_CASE_PREFIX);
     let r = glob(ps.as_str()).expect("failed glob");
     for p in r {
-        let tmp = match p {
+        let current_path = match p {
             Ok(a) => a,
             Err(e) => {
                 eprintln!("{}", e);
@@ -158,11 +160,14 @@ fn main() {
             }
         };
 
-        if tmp.to_string_lossy().contains("site-packages") {
+        if IGNORE_DIR_NAMES
+            .iter()
+            .any(|d| current_path.to_string_lossy().contains(d))
+        {
             continue;
         }
 
-        let test_py_path = Path::new(&tmp);
+        let test_py_path = Path::new(&current_path);
         let parsed: Statements = match parse_file(&test_py_path) {
             Ok(s) => s,
             Err(e) => {
@@ -178,16 +183,16 @@ fn main() {
             }
         }
 
-        println!(
-            "================================================================================"
-        );
-        for (k, v) in statements_map.iter() {
-            println!("*** {}", k);
-            // print_pretty(&v.import_table);
-        }
-        println!(
-            "================================================================================"
-        );
+        // println!(
+        //     "================================================================================"
+        // );
+        // for (k, v) in statements_map.iter() {
+        //     println!("*** {}", k);
+        //     // print_pretty(&v.import_table);
+        // }
+        // //  println!(
+        // //      "================================================================================"
+        // //  );
 
         let tests = enumerate_tests(&parsed);
         for t in tests.iter() {
@@ -249,6 +254,7 @@ static UNITTEST_SKIP_IF_DECORATOR: &str = "skipIf";
 static UNITTEST_SKIP_UNLESS_DECORATOR: &str = "skipUnless";
 
 fn has_unittest_skip(statements: &Statements) -> bool {
+    // println!("has_unittest_skip ==>");
     let import = &statements.import_table;
 
     let mut import_unittest = false;
@@ -264,21 +270,21 @@ fn has_unittest_skip(statements: &Statements) -> bool {
         }
 
         import_unittest = true;
-        println!("import_unittest => true");
+        // println!("import_unittest => true");
 
-        if v.is_some() {
-            let e = v.as_ref().unwrap();
-            for (kk, vv) in e.iter() {
-                println!("  exported: {:?}", kk);
-                if kk == &UNITTEST_SKIP_EXCEPTION.to_string() {
-                    import_skip_test = true;
-                }
+        //  if v.is_some() {
+        //      let e = v.as_ref().unwrap();
+        //      for (kk, vv) in e.iter() {
+        //          println!("  exported: {:?}", kk);
+        //          if kk == &UNITTEST_SKIP_EXCEPTION.to_string() {
+        //              import_skip_test = true;
+        //          }
 
-                if vv.is_some() {
-                    println!("    as: {:?}", vv);
-                }
-            }
-        }
+        //          if vv.is_some() {
+        //              println!("    as: {:?}", vv);
+        //          }
+        //      }
+        //  }
     }
 
     true
@@ -290,22 +296,25 @@ fn enumerate_tests(statements: &Statements) -> Vec<String> {
     // this module
     {
         let splitted = statements.module.split('.').collect::<Vec<&str>>();
-        if splitted.len() <= 0 {
-            result.push(make_test_name(statements, None, None));
-        } else {
-            for e in splitted {
-                result.push(make_test_name(statements, None, None));
+        if splitted.len() > 0 {
+            for (i, _) in splitted.iter().enumerate() {
+                let s = splitted[..i].to_vec().join(".");
+                if result.contains(&s) {
+                    continue;
+                }
+                result.push(s);
             }
         }
+        result.push(make_test_name(statements, None, None));
 
-        // let mut nodes = [".."].repeat(*level as usize - 1).to_vec();
-        // match name {
-        //     Some(n) => nodes.extend(n.split('.').clone()),
-        //     None => {}
-        // };
+        //     // let mut nodes = [".."].repeat(*level as usize - 1).to_vec();
+        //     // match name {
+        //     //     Some(n) => nodes.extend(n.split('.').clone()),
+        //     //     None => {}
+        //     // };
 
-        // let path_str = nodes.join("/") + ".py";
-        // PathBuf::from_str(path_str.as_str()).unwrap()
+        //     // let path_str = nodes.join("/") + ".py";
+        //     // PathBuf::from_str(path_str.as_str()).unwrap()
     }
 
     // root function
@@ -452,45 +461,45 @@ fn _internal_build_statements(rs: &Stmt, statements: &mut Statements) {
             //     _internal_build_statements(f, statements);
             // }
         }
-        ast::Stmt::Raise(s) => {
-            // println!(
-            //     "--------------------------------------------------------------------------------"
-            // );
-            // println!("{:?}", s);
-            if s.exc.is_none() {
-                return;
-            }
-            let call = &s.exc.clone().unwrap();
-            // println!("call: {:?}", call);
-            if !call.is_call_expr() && call.as_call_expr().is_none() {
-                return;
-            }
-            let call_expr = call.as_call_expr().unwrap();
-            // println!("call_expr: {:?}", call_expr);
+        // ast::Stmt::Raise(s) => {
+        //     // println!(
+        //     //     "--------------------------------------------------------------------------------"
+        //     // );
+        //     // println!("{:?}", s);
+        //     if s.exc.is_none() {
+        //         return;
+        //     }
+        //     let call = &s.exc.clone().unwrap();
+        //     // println!("call: {:?}", call);
+        //     if !call.is_call_expr() && call.as_call_expr().is_none() {
+        //         return;
+        //     }
+        //     let call_expr = call.as_call_expr().unwrap();
+        //     // println!("call_expr: {:?}", call_expr);
 
-            let func = call_expr.func.clone();
-            // println!("func: {:?}", func);
+        //     let func = call_expr.func.clone();
+        //     // println!("func: {:?}", func);
 
-            if func.is_attribute_expr() {
-                // module.name()
-                let module = func.as_attribute_expr().unwrap();
-                // println!("attribute: {:?}", module);
-                let value = &module.value;
+        //     if func.is_attribute_expr() {
+        //         // module.name()
+        //         let module = func.as_attribute_expr().unwrap();
+        //         // println!("attribute: {:?}", module);
+        //         let value = &module.value;
 
-                let attr = &module.attr;
-                // println!("attr: {:?}", attr);
+        //         let attr = &module.attr;
+        //         // println!("attr: {:?}", attr);
 
-                let name = &value.as_name_expr().unwrap().id;
-                // println!("name: {:?}", name);
-            } else {
-                // name()
-                let value = func.as_name_expr().unwrap();
-                let name = &value.id;
-                // println!("name: {:?}", name);
-            }
+        //         let name = &value.as_name_expr().unwrap().id;
+        //         // println!("name: {:?}", name);
+        //     } else {
+        //         // name()
+        //         let value = func.as_name_expr().unwrap();
+        //         let name = &value.id;
+        //         // println!("name: {:?}", name);
+        //     }
 
-            raise_stmt(statements, &s);
-        }
+        //     raise_stmt(statements, &s);
+        // }
         _ => {}
     }
 }
@@ -522,27 +531,27 @@ fn build_statements(module_path: &Path, root: &Vec<Stmt>) -> Statements {
 
         // println!("imports: {}", states.imports.len());
         // for stmt in states.imports.iter() {
-        for stmt in states.raises.iter() {
-            // println!("stmt: {:?}", stmt.exc);
-            if stmt.exc.is_none() {
-                continue;
-            }
+        // for stmt in states.raises.iter() {
+        //     // println!("stmt: {:?}", stmt.exc);
+        //     if stmt.exc.is_none() {
+        //         continue;
+        //     }
 
-            let call = &stmt.exc;
-            // let func = &call.func;
-            // println!("{:?}", call);
+        //     let call = &stmt.exc;
+        //     // let func = &call.func;
+        //     // println!("{:?}", call);
 
-            // for name in stmt.names.iter() {
-            //     let asname = name.asname.as_ref();
-            //     if asname.is_some() {
-            //         println!("* import ==> {:?}", asname.unwrap().as_str());
-            //     }
-            // }
-        }
+        //     // for name in stmt.names.iter() {
+        //     //     let asname = name.asname.as_ref();
+        //     //     if asname.is_some() {
+        //     //         println!("* import ==> {:?}", asname.unwrap().as_str());
+        //     //     }
+        //     // }
+        // }
     }
 
-    let mods = module_runner(&states.imports, &states.import_from);
-    states.import_table = mods;
+    // let mods = module_runner(&states.imports, &states.import_from);
+    // states.import_table = mods;
 
     states
 }
