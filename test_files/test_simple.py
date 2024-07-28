@@ -13,8 +13,8 @@ from . import hogg
 # NOTE: invalid syntax
 # import .unittest
 from .my_unittest import my_skip, MyTestCase
-from ..mymy_unittest import mymy_skip
-from ...mymymy_unittest import mymymy_skip
+# from ..mymy_unittest import mymy_skip
+# from ...mymymy_unittest import mymymy_skip
 
 
 # NOTE: not allowed

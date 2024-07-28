@@ -53,11 +53,14 @@ fn parse_file(test_py_path: &Path) -> Result<Statements, String> {
     };
 
     let test_py_base_path = test_py_path.parent().unwrap();
-    let result = match ast::Suite::parse(
-        buf.as_str(),
-        test_py_base_path.file_name().unwrap().to_str().unwrap(),
-    )
-    .map_err(|e| e.to_string())
+    let file_name = match test_py_base_path.file_name() {
+        Some(f) => f,
+        None => {
+            return Err(format!("cannot get file name from {:?}", test_py_base_path));
+        }
+    };
+    let result = match ast::Suite::parse(buf.as_str(), file_name.to_str().unwrap())
+        .map_err(|e| e.to_string())
     {
         Ok(v) => v,
         Err(e) => {
@@ -78,10 +81,10 @@ fn parse_file(test_py_path: &Path) -> Result<Statements, String> {
 
     // println!("--------------------------------------------------------------------------------");
 
-    let mods = module_runner(&states.imports, &states.import_from);
     // println!("mods:");
     // print_pretty(&mods);
 
+    let mods = module_runner(&states.imports, &states.import_from);
     let leveled_modules: ImportMap = mods
         .clone()
         .into_iter()
@@ -142,6 +145,8 @@ fn main() {
         None => ".".to_owned(),
     };
 
+    let mut statements_map: HashMap<String, Statements> = HashMap::new();
+
     let ps = format!("{}/**/test_*.py", target_dir);
     let r = glob(ps.as_str()).expect("failed glob");
     for p in r {
@@ -158,9 +163,6 @@ fn main() {
         }
 
         let test_py_path = Path::new(&tmp);
-        // let test_py_base_path = Path::new("test_files");
-        // let test_py_path = test_py_base_path.join("test_simple.py");
-
         let parsed: Statements = match parse_file(&test_py_path) {
             Ok(s) => s,
             Err(e) => {
@@ -168,6 +170,24 @@ fn main() {
                 return;
             }
         };
+
+        let py_path_str = test_py_path.to_string_lossy().to_string();
+        if !statements_map.contains_key(&py_path_str) {
+            if parsed.import_table.len() > 0 {
+                statements_map.insert(py_path_str, parsed.clone());
+            }
+        }
+
+        println!(
+            "================================================================================"
+        );
+        for (k, v) in statements_map.iter() {
+            println!("*** {}", k);
+            // print_pretty(&v.import_table);
+        }
+        println!(
+            "================================================================================"
+        );
 
         let tests = enumerate_tests(&parsed);
         for t in tests.iter() {
@@ -217,9 +237,7 @@ fn module_runner(imports: &Vec<StmtImport>, import_froms: &Vec<StmtImportFrom>) 
         }
     }
 
-    // println!("********************************************************************************");
     // print_pretty(&result);
-    // println!("********************************************************************************");
 
     result
 }
@@ -231,6 +249,38 @@ static UNITTEST_SKIP_IF_DECORATOR: &str = "skipIf";
 static UNITTEST_SKIP_UNLESS_DECORATOR: &str = "skipUnless";
 
 fn has_unittest_skip(statements: &Statements) -> bool {
+    let import = &statements.import_table;
+
+    let mut import_unittest = false;
+    let mut import_skip_test = false;
+    let mut import_skip = false;
+    let mut import_skip_if = false;
+    let mut import_skip_unless = false;
+
+    for (k, v) in import.iter() {
+        let (m, l, f) = k;
+        if &m.clone().unwrap_or("".to_string()) != &UNITTEST_MODULE.to_string() {
+            continue;
+        }
+
+        import_unittest = true;
+        println!("import_unittest => true");
+
+        if v.is_some() {
+            let e = v.as_ref().unwrap();
+            for (kk, vv) in e.iter() {
+                println!("  exported: {:?}", kk);
+                if kk == &UNITTEST_SKIP_EXCEPTION.to_string() {
+                    import_skip_test = true;
+                }
+
+                if vv.is_some() {
+                    println!("    as: {:?}", vv);
+                }
+            }
+        }
+    }
+
     true
 }
 
@@ -490,6 +540,9 @@ fn build_statements(module_path: &Path, root: &Vec<Stmt>) -> Statements {
             // }
         }
     }
+
+    let mods = module_runner(&states.imports, &states.import_from);
+    states.import_table = mods;
 
     states
 }

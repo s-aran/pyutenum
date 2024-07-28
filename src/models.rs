@@ -14,9 +14,10 @@ use rustpython_parser::{
     Parse,
 };
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Statements {
     pub module: String,
+    pub import_table: ImportMap,
     pub imports: Vec<StmtImport>,
     pub import_from: Vec<StmtImportFrom>,
     pub classes: Vec<StmtClassDef>,
