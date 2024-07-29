@@ -299,7 +299,7 @@ fn enumerate_tests(statements: &Statements) -> Vec<String> {
         if splitted.len() > 0 {
             for (i, _) in splitted.iter().enumerate() {
                 let s = splitted[..i].to_vec().join(".");
-                if result.contains(&s) {
+                if result.contains(&s) || s.len() <= 0 {
                     continue;
                 }
                 result.push(s);
