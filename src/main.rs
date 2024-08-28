@@ -1,9 +1,10 @@
 use clap::{arg, command, Parser};
-use glob::glob;
+use glob::{glob, GlobError};
 
 mod models;
 use std::{
     collections::HashMap,
+    collections::HashSet,
     error::Error,
     ffi::OsStr,
     fs::File,
@@ -86,7 +87,7 @@ fn parse_file(test_py_path: &Path) -> Result<Statements, String> {
     // println!("mods:");
     // print_pretty(&mods);
 
-    // let mods = module_runner(&states.imports, &states.import_from);
+    let mods = module_runner(&states.imports, &states.import_from);
     // let leveled_modules: ImportMap = mods
     //     .clone()
     //     .into_iter()
@@ -139,6 +140,35 @@ fn parse_file(test_py_path: &Path) -> Result<Statements, String> {
     Ok(states)
 }
 
+fn glob_handler(p: Result<PathBuf, GlobError>) -> Option<PathBuf> {
+    let current_path = match p {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("{}", e);
+            return None;
+        }
+    };
+
+    if IGNORE_DIR_NAMES
+        .iter()
+        .any(|d| current_path.to_string_lossy().contains(d))
+    {
+        return None;
+    }
+
+    if current_path.is_file() {
+        let meta = match current_path.metadata() {
+            Ok(m) => m,
+            Err(_) => return None,
+        };
+        if meta.len() <= 0 {
+            return None;
+        }
+    }
+
+    return Some(current_path);
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -149,24 +179,29 @@ fn main() {
 
     let mut statements_map: HashMap<String, Statements> = HashMap::new();
 
-    let ps = format!("{}/**/{}*.py", target_dir, UNITTEST_TEST_CASE_PREFIX);
-    let r = glob(ps.as_str()).expect("failed glob");
-    for p in r {
-        let current_path = match p {
-            Ok(a) => a,
-            Err(e) => {
-                eprintln!("{}", e);
-                return;
+    let mut path_set = HashSet::<PathBuf>::new();
+
+    let glob_pattenrs = [
+        format!("{}/**/test.py", target_dir),
+        format!("{}/**/tests.py", target_dir),
+        format!("{}/**/test_*.py", target_dir),
+    ];
+
+    for ps in glob_pattenrs.iter() {
+        let r = glob(ps.as_str()).expect("failed glob");
+        for p in r {
+            match glob_handler(p) {
+                Some(current_path) => {
+                    path_set.insert(current_path);
+                }
+                None => {}
             }
-        };
-
-        if IGNORE_DIR_NAMES
-            .iter()
-            .any(|d| current_path.to_string_lossy().contains(d))
-        {
-            continue;
         }
+    }
 
+    let mut enumerated_test = HashSet::<String>::new();
+
+    for current_path in path_set.iter() {
         let test_py_path = Path::new(&current_path);
         let parsed: Statements = match parse_file(&test_py_path) {
             Ok(s) => s,
@@ -188,16 +223,23 @@ fn main() {
         // );
         // for (k, v) in statements_map.iter() {
         //     println!("*** {}", k);
-        //     // print_pretty(&v.import_table);
+        //     print_pretty(&v.import_table);
         // }
-        // //  println!(
-        // //      "================================================================================"
-        // //  );
+        // println!(
+        //     "================================================================================"
+        // );
 
         let tests = enumerate_tests(&parsed);
-        for t in tests.iter() {
-            println!("{}", t);
-        }
+        enumerated_test.extend(tests);
+    }
+
+    let mut sorting = enumerated_test
+        .iter()
+        .map(|e| e.to_owned())
+        .collect::<Vec<String>>();
+    sorting.sort();
+    for t in sorting.iter() {
+        println!("{}", t);
     }
 }
 
@@ -290,8 +332,57 @@ fn has_unittest_skip(statements: &Statements) -> bool {
     true
 }
 
-fn enumerate_tests(statements: &Statements) -> Vec<String> {
-    let mut result: Vec<String> = vec![];
+fn has_unittest_skip_for_func(func: &StmtFunctionDef) -> bool {
+    for deco in func.decorator_list.iter() {
+        let is_attr = deco.is_attribute_expr();
+        let is_name = deco.is_name_expr();
+
+        if !is_attr && !is_name {
+            // println!("continue!! {:?}", deco);
+            continue;
+        }
+
+        // println!("{:?}", &deco);
+
+        if is_attr {
+            let ae = &deco.as_attribute_expr().unwrap();
+            let v = &ae.value;
+            let a = &ae.attr;
+            if v.is_name_expr() {
+                let nm = &v.as_name_expr();
+                let i = &nm.unwrap().id;
+                let id_str = &i.to_string();
+                println!("vi: {:?}", id_str);
+            }
+            let attr_str = &a.to_string();
+            println!("a: {:?}", attr_str);
+
+            continue;
+        }
+
+        if is_name {
+            let nm = &deco.as_name_expr().unwrap();
+            let i = &nm.id;
+            let id_str = &i.to_string();
+            println!("i: {:?}", id_str);
+        }
+    }
+
+    true
+}
+
+fn has_unittest_skip_for_class(class: &StmtClassDef) -> bool {
+    for deco in class.decorator_list.iter() {
+        let d = deco;
+        println!("{:?}", d);
+        println!("* {:?} in decorator list", deco);
+    }
+
+    true
+}
+
+fn enumerate_tests(statements: &Statements) -> HashSet<String> {
+    let mut result: HashSet<String> = HashSet::new();
 
     // this module
     {
@@ -302,10 +393,10 @@ fn enumerate_tests(statements: &Statements) -> Vec<String> {
                 if result.contains(&s) || s.len() <= 0 {
                     continue;
                 }
-                result.push(s);
+                result.insert(s);
             }
         }
-        result.push(make_test_name(statements, None, None));
+        result.insert(make_test_name(statements, None, None));
 
         //     // let mut nodes = [".."].repeat(*level as usize - 1).to_vec();
         //     // match name {
@@ -317,17 +408,20 @@ fn enumerate_tests(statements: &Statements) -> Vec<String> {
         //     // PathBuf::from_str(path_str.as_str()).unwrap()
     }
 
+    // println!("{:?}", statements.import_table);
+
     // root function
     for f in statements.methods.iter() {
         if f.name.starts_with(UNITTEST_TEST_CASE_PREFIX) {
-            result.push(make_test_name(&statements, None, Some(&f)));
+            // has_unittest_skip_for_func(&f);
+            result.insert(make_test_name(&statements, None, Some(&f)));
         }
     }
 
     // class methods
     for c in statements.classes.iter() {
         // this class
-        result.push(make_test_name(statements, Some(&c), None));
+        result.insert(make_test_name(statements, Some(&c), None));
 
         for f in c.body.iter() {
             if !f.is_function_def_stmt() {
@@ -336,11 +430,13 @@ fn enumerate_tests(statements: &Statements) -> Vec<String> {
 
             let func = f.as_function_def_stmt().unwrap();
             if func.name.starts_with(UNITTEST_TEST_CASE_PREFIX) {
-                result.push(make_test_name(&statements, Some(&c), Some(&func)));
+                // has_unittest_skip_for_func(&func);
+                result.insert(make_test_name(&statements, Some(&c), Some(&func)));
             }
         }
     }
 
+    // result.iter().map(|e| e.to_owned()).collect()
     result
 }
 
@@ -360,17 +456,6 @@ fn make_test_name(
     };
 
     format!("{}{}{}", statements.module, class_name, func_name,)
-}
-
-fn make_path_from_module(name: &ModuleName, level: &Level) -> PathBuf {
-    let mut nodes = [".."].repeat(*level as usize - 1).to_vec();
-    match name {
-        Some(n) => nodes.extend(n.split('.').clone()),
-        None => {}
-    };
-
-    let path_str = nodes.join("/") + ".py";
-    PathBuf::from_str(path_str.as_str()).unwrap()
 }
 
 fn print_pretty(import: &ImportMap) {
@@ -550,8 +635,8 @@ fn build_statements(module_path: &Path, root: &Vec<Stmt>) -> Statements {
         // }
     }
 
-    // let mods = module_runner(&states.imports, &states.import_from);
-    // states.import_table = mods;
+    let mods = module_runner(&states.imports, &states.import_from);
+    states.import_table = mods;
 
     states
 }

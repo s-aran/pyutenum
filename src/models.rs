@@ -1,11 +1,4 @@
-use std::{
-    collections::HashMap,
-    error::Error,
-    fs::File,
-    io::Read,
-    path::{Path, PathBuf},
-    str::FromStr,
-};
+use std::collections::HashMap;
 
 use rustpython_parser::{
     ast::{
