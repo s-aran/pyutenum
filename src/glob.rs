@@ -1,8 +1,6 @@
 use glob::{glob, GlobError};
-use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-};
+use rayon::prelude::*;
+use std::{collections::HashSet, path::PathBuf};
 const IGNORE_DIR_NAMES: [&str; 1] = ["site-packages"];
 
 fn glob_handler(p: Result<PathBuf, GlobError>) -> Option<PathBuf> {
@@ -35,8 +33,6 @@ fn glob_handler(p: Result<PathBuf, GlobError>) -> Option<PathBuf> {
 }
 
 pub fn glob_py(target_dir: impl Into<String>) -> HashSet<PathBuf> {
-    let mut path_set = HashSet::<PathBuf>::new();
-
     let target_dir_str = target_dir.into();
 
     let glob_pattenrs = [
@@ -45,15 +41,22 @@ pub fn glob_py(target_dir: impl Into<String>) -> HashSet<PathBuf> {
         format!("{}/**/test_*.py", &target_dir_str),
     ];
 
-    for ps in glob_pattenrs.iter() {
-        let r = glob(ps.as_str()).expect("failed glob");
-        for p in r {
-            match glob_handler(p) {
-                Some(current_path) => {
-                    path_set.insert(current_path);
-                }
-                None => {}
-            }
+    let path_vec = glob_pattenrs
+        .iter()
+        .map(|ps| {
+            let r = glob(ps.as_str()).expect("failed glob");
+            r.map(|p| glob_handler(p))
+                .filter(|p| p.is_some())
+                .map(|p| p.unwrap())
+                .collect()
+        })
+        .collect::<Vec<Vec<PathBuf>>>();
+
+    let mut path_set = HashSet::<PathBuf>::new();
+
+    for v in path_vec.iter() {
+        for p in v.iter() {
+            path_set.insert(p.clone());
         }
     }
 

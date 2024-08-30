@@ -4,7 +4,13 @@ use clap::{arg, command, Parser};
 use glob::glob_py;
 
 mod models;
-use std::{collections::HashMap, collections::HashSet, path::Path};
+use std::{
+    collections::{HashMap, HashSet},
+    io::{stdout, BufWriter, Write},
+    path::Path,
+};
+
+use rayon::prelude::*;
 
 use models::Statements;
 
@@ -47,19 +53,24 @@ fn main() {
         enumerated_test.extend(tests);
     }
 
-    let mut sorting = enumerated_test
-        .iter()
-        .map(|e| e.to_owned())
-        .collect::<Vec<String>>();
+    let mut sorting = enumerated_test.iter().collect::<Vec<&String>>();
     sorting.sort();
 
     let output = sorting
         .iter()
-        .map(|p| p.to_owned())
-        .collect::<Vec<String>>()
-        .join("\n");
+        .map(|p| p.as_bytes())
+        .chain(Some("".as_bytes()).into_iter())
+        .collect::<Vec<&[u8]>>()
+        .join("\n".as_bytes());
 
-    println!("{}", output);
+    let stdout = stdout();
+    let mut out = BufWriter::new(stdout.lock());
+
+    for b in output.iter() {
+        let _ = out.write_all(&[*b]);
+    }
+
+    let _ = out.flush();
 }
 
 #[derive(Clone, Parser, Debug)]
