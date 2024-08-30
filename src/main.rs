@@ -76,6 +76,6 @@ fn main() {
 #[derive(Clone, Parser, Debug)]
 #[command(author, version, about, long_about=None)]
 struct Args {
-    #[arg(help = "FILE")]
+    #[arg(help = "DIR")]
     files: Option<String>,
 }
