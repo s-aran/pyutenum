@@ -42,7 +42,7 @@ pub fn glob_py(target_dir: impl Into<String>) -> HashSet<PathBuf> {
     ];
 
     let path_vec = glob_pattenrs
-        .iter()
+        .par_iter()
         .map(|ps| {
             let r = glob(ps.as_str()).expect("failed glob");
             r.map(|p| glob_handler(p))
