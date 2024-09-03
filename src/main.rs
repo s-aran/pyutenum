@@ -7,7 +7,7 @@ mod models;
 use std::{
     collections::{HashMap, HashSet},
     io::{stdout, BufWriter, Write},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use rayon::prelude::*;
@@ -32,16 +32,18 @@ fn main() {
 
     let path_set = glob_py(target_dir);
 
-    for current_path in path_set.iter() {
-        let test_py_path = Path::new(&current_path);
-        let parsed: Statements = match parse_file(&test_py_path) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("{}", e);
-                return;
-            }
-        };
+    let parsed_vec = path_set
+        .par_iter()
+        .map(|current_path| {
+            let test_py_path = Path::new(&current_path);
+            let parsed = parse_file(&test_py_path);
+            (current_path, parsed)
+        })
+        .filter(|e| e.1.is_ok())
+        .map(|e| (e.0, e.1.unwrap()))
+        .collect::<HashMap<&PathBuf, Statements>>();
 
+    for (test_py_path, parsed) in parsed_vec.iter() {
         let py_path_str = test_py_path.to_string_lossy().to_string();
         if !statements_map.contains_key(&py_path_str) {
             if parsed.import_table.len() > 0 {
