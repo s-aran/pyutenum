@@ -22,7 +22,7 @@ mod skip;
 fn main() {
     let args = Args::parse();
 
-    let target_dir = match args.files {
+    let target_dir = match args.dir {
         Some(p) => p,
         None => ".".to_owned(),
     };
@@ -79,5 +79,5 @@ fn main() {
 #[command(author, version, about, long_about=None)]
 struct Args {
     #[arg(help = "DIR")]
-    files: Option<String>,
+    dir: Option<String>,
 }
