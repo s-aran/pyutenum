@@ -17,7 +17,6 @@ use models::Statements;
 mod enumerator;
 mod glob;
 mod parser;
-mod skip;
 
 fn main() {
     let args = Args::parse();
