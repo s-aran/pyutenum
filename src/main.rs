@@ -2,6 +2,7 @@ use crate::enumerator::enumerate_tests;
 use crate::parser::parse_file;
 use clap::{arg, command, Parser};
 use glob::glob_py;
+use latest_file::{LatestFile, LATEST_FILE_NAME};
 
 mod models;
 use std::{
@@ -16,10 +17,35 @@ use models::Statements;
 
 mod enumerator;
 mod glob;
+mod latest_file;
 mod parser;
 
 fn main() {
     let args = Args::parse();
+
+    let latest_file = LatestFile::new_from_args(&args);
+    if args.clear_latest {
+        match latest_file.remove() {
+            Ok(_) => return,
+            Err(e) => {
+                eprintln!("failed to clear latest file: {}", e);
+                return;
+            }
+        }
+    }
+
+    if latest_file.exists() {
+        let contents = match latest_file.read() {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("{}", e);
+                return;
+            }
+        };
+
+        println!("{}", contents);
+        return;
+    }
 
     let target_dir = match args.dir {
         Some(p) => p,
@@ -79,4 +105,10 @@ fn main() {
 struct Args {
     #[arg(help = "DIR")]
     dir: Option<String>,
+
+    #[arg(short, long, help = format!("latest file, default=<temp dir>/{}", LATEST_FILE_NAME))]
+    pub latest_file: Option<String>,
+
+    #[arg(short, long, help = "clear latest file")]
+    pub clear_latest: bool,
 }
