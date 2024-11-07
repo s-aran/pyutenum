@@ -43,7 +43,17 @@ fn main() {
             }
         };
 
-        println!("{}", contents);
+        let split = contents
+            .split("\n")
+            .map(|l| l.to_owned())
+            .collect::<HashSet<String>>();
+        let mut sorting = split.iter().map(|s| s.to_owned()).collect::<Vec<String>>();
+        sorting.sort();
+
+        for l in sorting.iter() {
+            println!("{}", l);
+        }
+
         return;
     }
 
