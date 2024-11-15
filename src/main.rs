@@ -43,18 +43,21 @@ fn main() {
             }
         };
 
-        let split = contents
-            .split("\n")
-            .map(|l| l.to_owned())
-            .collect::<HashSet<String>>();
-        let mut sorting = split.iter().map(|s| s.to_owned()).collect::<Vec<String>>();
-        sorting.sort();
+        // NOTE: avoid readable removed file
+        if contents.len() > 0 {
+            let split = contents
+                .split("\n")
+                .map(|l| l.to_owned())
+                .collect::<HashSet<String>>();
+            let mut sorting = split.iter().map(|s| s.to_owned()).collect::<Vec<String>>();
+            sorting.sort();
 
-        for l in sorting.iter() {
-            println!("{}", l);
+            for l in sorting.iter() {
+                println!("{}", l);
+            }
+
+            return;
         }
-
-        return;
     }
 
     let target_dir = match args.dir {
