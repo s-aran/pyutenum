@@ -34,7 +34,12 @@ fn main() {
         }
     }
 
-    if latest_file.exists() {
+    if args.show_latest_filepath {
+        println!("{}", latest_file.get_file_path().to_str().unwrap());
+        return;
+    }
+
+    if latest_file.exists() && !args.force {
         let contents = match latest_file.read() {
             Ok(r) => r,
             Err(e) => {
@@ -124,4 +129,10 @@ struct Args {
 
     #[arg(short, long, help = "clear latest file")]
     pub clear_latest: bool,
+
+    #[arg(short, long, help = "show latest file path")]
+    pub show_latest_filepath: bool,
+
+    #[arg(short, long, help = "force enumerate")]
+    pub force: bool,
 }
