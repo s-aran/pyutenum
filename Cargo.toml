@@ -12,4 +12,6 @@ rustpython-parser = { version = "0.4", features = ["full-lexer", "serde"] }
 serde = { version = "1.0", features = ["derive", "serde_derive", "rc"] }
 clap = { version = "4.5", features = ["derive"] }
 glob = { version = "0.3" }
-rayon = "1.10"
+rayon = "1.11"
+dialoguer = { version = "0.12", features = ["fuzzy-select"] }
+ahash = "0.8"
