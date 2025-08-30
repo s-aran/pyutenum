@@ -1,6 +1,8 @@
 use glob::{glob, GlobError};
 use rayon::prelude::*;
 use std::{collections::HashSet, path::PathBuf};
+use ahash::AHashSet;
+
 const IGNORE_DIR_NAMES: [&str; 1] = ["site-packages"];
 
 fn glob_handler(p: Result<PathBuf, GlobError>) -> Option<PathBuf> {
@@ -32,7 +34,7 @@ fn glob_handler(p: Result<PathBuf, GlobError>) -> Option<PathBuf> {
     return Some(current_path);
 }
 
-pub fn glob_py(target_dir: impl Into<String>) -> HashSet<PathBuf> {
+pub fn glob_py(target_dir: impl Into<String>) -> AHashSet<PathBuf> {
     let target_dir_str = target_dir.into();
 
     let glob_pattenrs = [
@@ -52,7 +54,7 @@ pub fn glob_py(target_dir: impl Into<String>) -> HashSet<PathBuf> {
         })
         .collect::<Vec<Vec<PathBuf>>>();
 
-    let mut path_set = HashSet::<PathBuf>::new();
+    let mut path_set = AHashSet::<PathBuf>::new();
 
     for v in path_vec.iter() {
         for p in v.iter() {

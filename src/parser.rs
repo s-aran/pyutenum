@@ -1,22 +1,9 @@
-use clap::{arg, command, Parser};
+use std::{ffi::OsStr, fs::File, io::Read, path::Path};
 
-use std::{
-    collections::HashMap,
-    collections::HashSet,
-    error::Error,
-    ffi::OsStr,
-    fs::File,
-    io::Read,
-    path::{Path, PathBuf},
-    str::FromStr,
-};
-
-use crate::models::{Exports, Import, ImportMap, Level, Module, ModuleName, Statements};
+use crate::models::Statements;
 use rustpython_parser::{
-    ast::{
-        self, Alias, Stmt, StmtClassDef, StmtFunctionDef, StmtImport, StmtImportFrom, StmtRaise,
-    },
     Parse,
+    ast::{self, Stmt, StmtClassDef, StmtFunctionDef, StmtImport, StmtImportFrom, StmtRaise},
 };
 
 pub fn parse_file(test_py_path: &Path) -> Result<Statements, String> {

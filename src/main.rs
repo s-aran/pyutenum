@@ -7,8 +7,7 @@ use glob::glob_py;
 
 mod models;
 use std::{
-    collections::{HashMap, HashSet},
-    io::{stdout, BufWriter, Write},
+    io::{BufWriter, Write, stdout},
     path::{Path, PathBuf},
 };
 
@@ -28,8 +27,8 @@ fn main() {
         None => ".".to_owned(),
     };
 
-    let mut statements_map: HashMap<String, Statements> = HashMap::new();
-    let mut enumerated_test = HashSet::<String>::new();
+    let mut statements_map: AHashMap<String, Statements> = AHashMap::new();
+    let mut enumerated_test = AHashSet::<String>::new();
 
     let path_set = glob_py(target_dir);
 

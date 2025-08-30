@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 
-use rustpython_parser::{
-    ast::{
-        self, Alias, Stmt, StmtClassDef, StmtFunctionDef, StmtImport, StmtImportFrom, StmtRaise,
-    },
-    Parse,
+use rustpython_parser::ast::{
+    Alias, StmtClassDef, StmtFunctionDef, StmtImport, StmtImportFrom, StmtRaise,
 };
 
 #[derive(Clone, Debug, Default)]

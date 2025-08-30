@@ -1,6 +1,5 @@
-use std::collections::HashSet;
-
 use crate::models::Statements;
+use ahash::AHashSet;
 use rustpython_parser::ast::{StmtClassDef, StmtFunctionDef};
 
 static UNITTEST_TEST_CASE_CLASS: &str = "TestCase";
@@ -11,8 +10,8 @@ static UNITTEST_DJANGO_TRANSACTION_TEST_CASE_CLASS: &str = "TransactionTestCase"
 static UNITTEST_DJANGO_SIMPLE_TEST_CASE: &str = "SimpleTestCase";
 static UNITTEST_DJANGO_LIVE_SERVER_TEST_CASE: &str = "LiveServerTestCase";
 
-pub fn enumerate_tests(statements: &Statements) -> HashSet<String> {
-    let mut result: HashSet<String> = HashSet::new();
+pub fn enumerate_tests(statements: &Statements) -> AHashSet<String> {
+    let mut result: AHashSet<String> = AHashSet::new();
 
     // this module
     {
