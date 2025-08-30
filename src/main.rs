@@ -1,6 +1,8 @@
 use crate::enumerator::enumerate_tests;
 use crate::parser::parse_file;
-use clap::{arg, command, Parser};
+use ahash::{AHashMap, AHashSet, HashMap};
+use clap::{Parser, arg, command};
+use dialoguer::{FuzzySelect, MultiSelect};
 use glob::glob_py;
 
 mod models;
@@ -57,12 +59,36 @@ fn main() {
     let mut sorting = enumerated_test.iter().collect::<Vec<&String>>();
     sorting.sort();
 
-    let output = sorting
+    if args.select {
+        let items = sorting
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<String>>();
+
+        let selection = if let Ok(s) = FuzzySelect::new()
+            .with_prompt("> ")
+            .items(&items)
+            .highlight_matches(true)
+            .interact()
+        {
+            s
+        } else {
+            println!("unexpected input");
+            return;
+        };
+
+        println!("{}", items[selection]);
+
+        return;
+    }
+
+    let output_iter = sorting
         .iter()
         .map(|p| p.as_bytes())
         .chain(Some("".as_bytes()).into_iter())
-        .collect::<Vec<&[u8]>>()
-        .join("\n".as_bytes());
+        .collect::<Vec<&[u8]>>();
+
+    let output = output_iter.join("\n".as_bytes());
 
     let stdout = stdout();
     let mut out = BufWriter::new(stdout.lock());
@@ -79,4 +105,6 @@ fn main() {
 struct Args {
     #[arg(help = "DIR")]
     dir: Option<String>,
+    #[arg(short, long, help = "fuzzy select")]
+    select: bool,
 }
