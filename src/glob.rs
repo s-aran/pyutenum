@@ -1,7 +1,7 @@
-use glob::{glob, GlobError};
+use ahash::AHashSet;
+use glob::{GlobError, glob};
 use rayon::prelude::*;
 use std::{collections::HashSet, path::PathBuf};
-use ahash::AHashSet;
 
 const IGNORE_DIR_NAMES: [&str; 1] = ["site-packages"];
 
